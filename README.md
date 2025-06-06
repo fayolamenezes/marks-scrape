@@ -19,7 +19,7 @@ This Python script uses **Selenium** and **BeautifulSoup** to automatically log 
 
 - Python 3.7+
 - Google Chrome installed
-- Matching version of [ChromeDriver](https://sites.google.com/chromium.org/driver/)
+- Matching version of [ChromeDriver](https://googlechromelabs.github.io/chrome-for-testing/#stable)
 
 ---
 
