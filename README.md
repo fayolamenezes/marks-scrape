@@ -1,4 +1,4 @@
-# CRCE Contineo Marks & Attendance Scraper
+# Contineo Marks & Attendance Scraper
 
 This Python script uses **Selenium** and **BeautifulSoup** to automatically log in to the CRCE Contineo Portal and extract your **CIE marks** and **attendance** data. It generates a clean, printable **PDF report** with tables using **Matplotlib**.
 
