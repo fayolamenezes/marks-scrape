@@ -11,7 +11,6 @@ This Python script uses **Selenium** and **BeautifulSoup** to automatically log 
   - CIE (Continuous Internal Evaluation) Marks
   - Subject-wise Attendance Percentages
 - Outputs data into a formatted **PDF report**
-- Blank cells instead of NaN for missing entries
 - Easy to customize for any CRCE student
 
 ---
@@ -38,9 +37,10 @@ This Python script uses **Selenium** and **BeautifulSoup** to automatically log 
 ---
 
 3. **Download ChromeDriver**
-- Check your Chrome version.
-- Download the matching ChromeDriver from: https://sites.google.com/chromium.org/driver/
-- Place the chromedriver executable in the project folder or add it to your system PATH.
+- Check your current Google Chrome version (go to chrome://settings/help).
+- Visit the official Chrome to download the matching ChromeDriver from: https://googlechromelabs.github.io/chrome-for-testing/#stable
+- Extract the chromedriver.exe file.
+- Place it in the project folder or add its location to your system PATH.
 
 4. **Setup**
    1. Open marks-scraper.py in any code editor.
