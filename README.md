@@ -50,7 +50,7 @@ This Python script uses **Selenium** and **BeautifulSoup** to automatically log 
    2. Update your credentials:
       ```bash
       prn_input.send_keys("YOUR_PRN_NUMBER")
-      Select(driver.find_element(By.ID, "dd")).select_by_value("DD ")   # Day (e.g. "05 ")
+      Select(driver.find_element(By.ID, "dd")).select_by_value("DD ")   # Day (e.g. "05 ") Note the space after the number
       Select(driver.find_element(By.ID, "mm")).select_by_value("MM")    # Month (e.g. "06")
       Select(driver.find_element(By.ID, "yyyy")).select_by_value("YYYY")# Year (e.g. "2003")
 
