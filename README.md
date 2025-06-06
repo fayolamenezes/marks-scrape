@@ -28,7 +28,9 @@ This Python script uses **Selenium** and **BeautifulSoup** to automatically log 
 1. **Clone this repository**
    ```bash
    git clone https://github.com/your-username/contineo-marks-scraper.git
-   cd contineo-marks-scraper
+   cd marks-scraper
+   python -m venv venv
+   venv\Scripts\activate          # For Windows
 ---
    
 2. **Install dependencies**
