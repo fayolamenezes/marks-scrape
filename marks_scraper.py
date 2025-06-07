@@ -6,35 +6,34 @@ from bs4 import BeautifulSoup
 import re
 import time
 import matplotlib
-matplotlib.use('Agg')  # Use non-GUI backend
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import pandas as pd
 import json
 import os
 
-def scrape_and_generate_pdf(prn, day, month, year, include_marks=True, include_attendance=True):
-    # Setup Chrome driver
+def scrape_and_generate_pdfs(prn, day, month, year, include_marks=True, include_attendance=True):
+    # Setup headless Chrome driver
     options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # run in headless mode
+    options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
 
     try:
         driver.get("https://crce-students.contineo.in/parents/index.php")
         wait = WebDriverWait(driver, 10)
 
-        # Fill login form
-        prn_input = wait.until(EC.presence_of_element_located((By.ID, "username")))
-        prn_input.send_keys(prn)
+        # Fill PRN
+        wait.until(EC.presence_of_element_located((By.ID, "username"))).send_keys(prn)
 
-        # Select day (handle trailing space in option value)
+        # Select day
         day_select = Select(driver.find_element(By.ID, "dd"))
         for option in day_select.options:
             if option.text.strip() == day:
                 option.click()
                 break
 
-        # Select month (3-letter abbreviation)
+        # Convert month to 3-letter abbreviation capitalized
         month_abbr = month[:3].capitalize()
         month_select = Select(driver.find_element(By.ID, "mm"))
         for option in month_select.options:
@@ -42,14 +41,13 @@ def scrape_and_generate_pdf(prn, day, month, year, include_marks=True, include_a
                 option.click()
                 break
 
-        # Select year directly
+        # Select year
         Select(driver.find_element(By.ID, "yyyy")).select_by_value(year)
 
         # Submit form
-        submit_button = driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
-        driver.execute_script("arguments[0].click();", submit_button)
+        driver.execute_script("arguments[0].click();", driver.find_element(By.CSS_SELECTOR, "input[type='submit']"))
 
-        # Wait for dashboard to load
+        # Wait for the page to load dashboard data
         time.sleep(5)
 
         html = driver.page_source
@@ -63,13 +61,13 @@ def scrape_and_generate_pdf(prn, day, month, year, include_marks=True, include_a
         for script in scripts:
             text = script.text.strip()
 
-            # Extract CIE Marks only if requested
+            # Parse CIE marks JSON from script text
             if include_marks and "stackedBarChart_1" in text and "columns" in text:
                 try:
                     match = re.search(r'columns\s*:\s*(\[\[.*?\]\])', text, re.DOTALL)
                     if match:
                         raw_json = match.group(1)
-                        json_ready = raw_json.replace("'", '"').replace("null", "null")
+                        json_ready = raw_json.replace("'", '"')
                         cie_list = json.loads(json_ready)
 
                         for row in cie_list:
@@ -79,59 +77,121 @@ def scrape_and_generate_pdf(prn, day, month, year, include_marks=True, include_a
                 except Exception as e:
                     print("Error parsing CIE JSON:", e)
 
-            # Extract Attendance only if requested
+            # Parse Attendance data from script text
             if include_attendance and "gaugeTypeMulti" in text and "columns" in text:
-                att_data = re.findall(r'\["(.*?)",(\d+)\]', text)
-                for subject, percent in att_data:
-                    attendance[subject] = int(percent)
+                try:
+                    att_data = re.findall(r'\["(.*?)",(\d+)\]', text)
+                    for subject, percent in att_data:
+                        attendance[subject] = int(percent)
+                except Exception as e:
+                    print("Error parsing attendance data:", e)
 
-        # Create DataFrames if requested
-        cie_df = pd.DataFrame({"Subject": subjects}) if include_marks else None
-        if include_marks:
+        # Create CIE DataFrame if marks requested
+        cie_df = None
+        if include_marks and cie_marks:
+            cie_df = pd.DataFrame({"Subject": subjects})
             for label, scores in cie_marks.items():
                 padded = (scores + [None] * len(subjects))[:len(subjects)]
                 cie_df[label] = padded
             cie_df = cie_df.dropna(axis=1, how='all')
+            numeric_cols = cie_df.columns.drop("Subject")
+            cie_df[numeric_cols] = cie_df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+            cie_df["Total"] = cie_df[numeric_cols].sum(axis=1)
 
-        att_df = pd.DataFrame(list(attendance.items()), columns=["Subject", "Attendance (%)"]) if include_attendance else None
+        # Create Attendance DataFrame if attendance requested
+        att_df = None
+        if include_attendance and attendance:
+            att_df = pd.DataFrame(list(attendance.items()), columns=["Subject", "Attendance (%)"])
 
-        # Generate PDF
+        # Create output directory if needed
         os.makedirs("output", exist_ok=True)
-        pdf_path = "output/marks_and_attendance.pdf"
-        with PdfPages(pdf_path) as pdf:
-            if include_marks and cie_df is not None and cie_df.shape[1] > 1:
-                fig1, ax1 = plt.subplots(figsize=(12, 6))
-                ax1.axis('off')
-                cie_cleaned = cie_df.fillna("").astype(str)
-                cie_table = ax1.table(cellText=cie_cleaned.values,
-                                      colLabels=cie_cleaned.columns,
-                                      cellLoc='center',
-                                      loc='center')
-                cie_table.auto_set_font_size(False)
-                cie_table.set_fontsize(10)
-                cie_table.scale(1.2, 1.2)
+
+        marks_pdf = None
+        attendance_pdf = None
+        combined_pdf = None
+
+        # If both marks and attendance are requested, create a combined PDF
+        if include_marks and include_attendance and cie_df is not None and att_df is not None and cie_df.shape[1] > 1 and not att_df.empty:
+            combined_pdf = "output/marks_and_attendance.pdf"
+            with PdfPages(combined_pdf) as pdf:
+
+                # Page 1: Marks Table
+                fig, ax = plt.subplots(figsize=(12, 6))
+                ax.axis('off')
+                table_data = cie_df.fillna("").astype(str)
+                table = ax.table(cellText=table_data.values,
+                                 colLabels=table_data.columns,
+                                 cellLoc='center',
+                                 loc='center')
+                table.auto_set_font_size(False)
+                table.set_fontsize(10)
+                table.scale(1.2, 1.2)
                 plt.title("CIE Marks", fontsize=14)
-                pdf.savefig(fig1, bbox_inches='tight')
-                plt.close(fig1)
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close(fig)
 
-            if include_attendance and att_df is not None and not att_df.empty:
-                fig2, ax2 = plt.subplots(figsize=(8, 4))
-                ax2.axis('off')
-                att_cleaned = att_df.fillna("").astype(str)
-                att_table = ax2.table(cellText=att_cleaned.values,
-                                      colLabels=att_cleaned.columns,
-                                      cellLoc='center',
-                                      loc='center')
-                att_table.auto_set_font_size(False)
-                att_table.set_fontsize(10)
-                att_table.scale(1.2, 1.2)
+                # Page 2: Attendance Table
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.axis('off')
+                table_data = att_df.fillna("").astype(str)
+                table = ax.table(cellText=table_data.values,
+                                 colLabels=table_data.columns,
+                                 cellLoc='center',
+                                 loc='center')
+                table.auto_set_font_size(False)
+                table.set_fontsize(10)
+                table.scale(1.2, 1.2)
                 plt.title("Attendance (%)", fontsize=14)
-                pdf.savefig(fig2, bbox_inches='tight')
-                plt.close(fig2)
+                pdf.savefig(fig, bbox_inches='tight')
+                plt.close(fig)
 
-        print(f"PDF generated at: {pdf_path}")
-        return pdf_path
+        else:
+            # Generate separate PDFs if only one or none is requested
+
+            # Marks PDF
+            if include_marks and cie_df is not None and cie_df.shape[1] > 1:
+                marks_pdf = "output/marks.pdf"
+                with PdfPages(marks_pdf) as pdf:
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    ax.axis('off')
+                    table_data = cie_df.fillna("").astype(str)
+                    table = ax.table(cellText=table_data.values,
+                                     colLabels=table_data.columns,
+                                     cellLoc='center',
+                                     loc='center')
+                    table.auto_set_font_size(False)
+                    table.set_fontsize(10)
+                    table.scale(1.2, 1.2)
+                    plt.title("CIE Marks", fontsize=14)
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close(fig)
+
+            # Attendance PDF
+            if include_attendance and att_df is not None and not att_df.empty:
+                attendance_pdf = "output/attendance.pdf"
+                with PdfPages(attendance_pdf) as pdf:
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    ax.axis('off')
+                    table_data = att_df.fillna("").astype(str)
+                    table = ax.table(cellText=table_data.values,
+                                     colLabels=table_data.columns,
+                                     cellLoc='center',
+                                     loc='center')
+                    table.auto_set_font_size(False)
+                    table.set_fontsize(10)
+                    table.scale(1.2, 1.2)
+                    plt.title("Attendance (%)", fontsize=14)
+                    pdf.savefig(fig, bbox_inches='tight')
+                    plt.close(fig)
+
+        # Return paths
+        if combined_pdf:
+            return {"combined": combined_pdf}
+        else:
+            return {
+                "marks": marks_pdf if marks_pdf else None,
+                "attendance": attendance_pdf if attendance_pdf else None
+            }
 
     finally:
         driver.quit()
-

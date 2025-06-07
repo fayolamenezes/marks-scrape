@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash
-from marks_scraper import scrape_and_generate_pdf
+from marks_scraper import scrape_and_generate_pdfs
 import os
 
 app = Flask(__name__)
@@ -28,13 +28,35 @@ def generate():
             flash("Select at least one: Marks or Attendance.", "error")
             return redirect(url_for('index'))
 
-        pdf_path = scrape_and_generate_pdf(prn, day, month, year, include_marks, include_attendance)
+        # Call updated function which returns paths to PDFs in a dict
+        pdf_paths = scrape_and_generate_pdfs(prn, day, month, year, include_marks, include_attendance)
 
-        if not os.path.exists(pdf_path):
-            flash("PDF could not be generated. Try again.", "error")
-            return redirect(url_for('index'))
+        # If both selected, check for combined PDF first
+        combined_pdf = pdf_paths.get("combined")
+        if combined_pdf and os.path.exists(combined_pdf):
+            return send_file(combined_pdf, as_attachment=True)
 
-        return send_file(pdf_path, as_attachment=True)
+        # Otherwise send marks PDF if requested
+        if include_marks:
+            marks_pdf = pdf_paths.get("marks")
+            if marks_pdf and os.path.exists(marks_pdf):
+                return send_file(marks_pdf, as_attachment=True)
+            else:
+                flash("Marks PDF not found.", "error")
+                return redirect(url_for('index'))
+
+        # Or send attendance PDF if requested
+        if include_attendance:
+            attendance_pdf = pdf_paths.get("attendance")
+            if attendance_pdf and os.path.exists(attendance_pdf):
+                return send_file(attendance_pdf, as_attachment=True)
+            else:
+                flash("Attendance PDF not found.", "error")
+                return redirect(url_for('index'))
+
+        # If none sent, fallback error
+        flash("PDF could not be generated. Try again.", "error")
+        return redirect(url_for('index'))
 
     except Exception as e:
         print(f"Error: {e}")
