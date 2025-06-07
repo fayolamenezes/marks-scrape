@@ -9,7 +9,7 @@ import matplotlib
 matplotlib.use('Agg')  # Use non-GUI backend
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-import pandas as pd
+import pandas as pd 
 import json
 
 # Setup Chrome driver
@@ -20,10 +20,10 @@ wait = WebDriverWait(driver, 10)
 
 # Fill login form
 prn_input = wait.until(EC.presence_of_element_located((By.ID, "username")))
-prn_input.send_keys("2022016402259731")
+prn_input.send_keys("your-prn-number")
 
-Select(driver.find_element(By.ID, "dd")).select_by_value("16 ")
-Select(driver.find_element(By.ID, "mm")).select_by_value("04")
+Select(driver.find_element(By.ID, "dd")).select_by_value("13 ")
+Select(driver.find_element(By.ID, "mm")).select_by_value("12")
 Select(driver.find_element(By.ID, "yyyy")).select_by_value("2004")
 
 submit_button = driver.find_element(By.CSS_SELECTOR, "input[type='submit']")
