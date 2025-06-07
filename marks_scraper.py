@@ -13,7 +13,7 @@ import pandas as pd
 import json
 import os
 
-def scrape_and_generate_pdf(prn, day, month, year):
+def scrape_and_generate_pdf(prn, day, month, year, include_marks=True, include_attendance=True):
     # Setup Chrome driver
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")  # run in headless mode
@@ -27,14 +27,14 @@ def scrape_and_generate_pdf(prn, day, month, year):
         prn_input = wait.until(EC.presence_of_element_located((By.ID, "username")))
         prn_input.send_keys(prn)
 
-        # Fix day: match value like "16 " with trailing space
+        # Select day (handle trailing space in option value)
         day_select = Select(driver.find_element(By.ID, "dd"))
         for option in day_select.options:
             if option.text.strip() == day:
                 option.click()
                 break
 
-        # Fix month: expects 3-letter abbreviation like "Apr", "Jan"
+        # Select month (3-letter abbreviation)
         month_abbr = month[:3].capitalize()
         month_select = Select(driver.find_element(By.ID, "mm"))
         for option in month_select.options:
@@ -42,7 +42,7 @@ def scrape_and_generate_pdf(prn, day, month, year):
                 option.click()
                 break
 
-        # Year select (should match directly)
+        # Select year directly
         Select(driver.find_element(By.ID, "yyyy")).select_by_value(year)
 
         # Submit form
@@ -63,8 +63,8 @@ def scrape_and_generate_pdf(prn, day, month, year):
         for script in scripts:
             text = script.text.strip()
 
-            # Extract CIE Marks
-            if "stackedBarChart_1" in text and "columns" in text:
+            # Extract CIE Marks only if requested
+            if include_marks and "stackedBarChart_1" in text and "columns" in text:
                 try:
                     match = re.search(r'columns\s*:\s*(\[\[.*?\]\])', text, re.DOTALL)
                     if match:
@@ -79,26 +79,27 @@ def scrape_and_generate_pdf(prn, day, month, year):
                 except Exception as e:
                     print("Error parsing CIE JSON:", e)
 
-            # Extract Attendance
-            elif "gaugeTypeMulti" in text and "columns" in text:
+            # Extract Attendance only if requested
+            if include_attendance and "gaugeTypeMulti" in text and "columns" in text:
                 att_data = re.findall(r'\["(.*?)",(\d+)\]', text)
                 for subject, percent in att_data:
                     attendance[subject] = int(percent)
 
-        # Create DataFrames
-        cie_df = pd.DataFrame({"Subject": subjects})
-        for label, scores in cie_marks.items():
-            padded = (scores + [None] * len(subjects))[:len(subjects)]
-            cie_df[label] = padded
-        cie_df = cie_df.dropna(axis=1, how='all')
+        # Create DataFrames if requested
+        cie_df = pd.DataFrame({"Subject": subjects}) if include_marks else None
+        if include_marks:
+            for label, scores in cie_marks.items():
+                padded = (scores + [None] * len(subjects))[:len(subjects)]
+                cie_df[label] = padded
+            cie_df = cie_df.dropna(axis=1, how='all')
 
-        att_df = pd.DataFrame(list(attendance.items()), columns=["Subject", "Attendance (%)"])
+        att_df = pd.DataFrame(list(attendance.items()), columns=["Subject", "Attendance (%)"]) if include_attendance else None
 
         # Generate PDF
         os.makedirs("output", exist_ok=True)
         pdf_path = "output/marks_and_attendance.pdf"
         with PdfPages(pdf_path) as pdf:
-            if cie_df.shape[1] > 1:
+            if include_marks and cie_df is not None and cie_df.shape[1] > 1:
                 fig1, ax1 = plt.subplots(figsize=(12, 6))
                 ax1.axis('off')
                 cie_cleaned = cie_df.fillna("").astype(str)
@@ -113,7 +114,7 @@ def scrape_and_generate_pdf(prn, day, month, year):
                 pdf.savefig(fig1, bbox_inches='tight')
                 plt.close(fig1)
 
-            if not att_df.empty:
+            if include_attendance and att_df is not None and not att_df.empty:
                 fig2, ax2 = plt.subplots(figsize=(8, 4))
                 ax2.axis('off')
                 att_cleaned = att_df.fillna("").astype(str)
@@ -133,3 +134,4 @@ def scrape_and_generate_pdf(prn, day, month, year):
 
     finally:
         driver.quit()
+

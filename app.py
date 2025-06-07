@@ -16,13 +16,19 @@ def generate():
         day = request.form.get('day', '').strip()
         month = request.form.get('month', '').strip()
         year = request.form.get('year', '').strip()
+        
+        include_marks = request.form.get('include_marks') == 'on'
+        include_attendance = request.form.get('include_attendance') == 'on'
 
         # Basic validation
         if not (prn and day and month and year):
             flash("All fields are required.", "error")
             return redirect(url_for('index'))
+        if not (include_marks or include_attendance):
+            flash("Select at least one: Marks or Attendance.", "error")
+            return redirect(url_for('index'))
 
-        pdf_path = scrape_and_generate_pdf(prn, day, month, year)
+        pdf_path = scrape_and_generate_pdf(prn, day, month, year, include_marks, include_attendance)
 
         if not os.path.exists(pdf_path):
             flash("PDF could not be generated. Try again.", "error")
